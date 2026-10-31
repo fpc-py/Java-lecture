@@ -1,0 +1,13 @@
+{
+  "path": "cached",
+  "extra": "simulateLoadMs=50",
+  "count": 200,
+  "key_span": 1,
+  "key_base": 91001,
+  "concurrency": 200,
+  "ok": 200,
+  "errors": 0,
+  "error_samples": [],
+  "elapsed_s": 0.244,
+  "qps": 821.1
+}

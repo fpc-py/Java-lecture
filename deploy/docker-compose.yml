@@ -1,0 +1,205 @@
+# ============================================================
+# Polaris 案例基础设施
+#
+# 端口全部高位化（1xxxx / 18xxx），原因：
+#   1. 不与开发者本机已有的 3306 / 6379 / 8080 抢端口
+#   2. 高位端口冲突时一眼能看出是本项目的容器
+#   3. 也避开了本机其他正在运行的项目（本项目实测环境里
+#      已有另一套 mysql:3308 / redis:6381 / rocketmq:19876）
+#
+# 三档 profile（内存实测见 docs/capacity-model.md）：
+#   min    ≈ 3.1GB   mysql + redis                          （M1~M7 足够）
+#   micro  ≈ 4.6GB   + rocketmq + nacos                     （M6、M8 需要）
+#   obs    ≈ 5.4GB   + prometheus + grafana                 （M10 需要）
+#
+# 用法：
+#   docker compose -f deploy/docker-compose.yml --profile min up -d
+#   或 scripts/up.sh min
+# ============================================================
+name: polaris
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: polaris-mysql
+    profiles: ["min", "micro", "obs"]
+    ports:
+      - "13306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      # 时间统一东八区：容器默认 UTC，与业务代码的 Instant 展示会差 8 小时，
+      # 排查"订单时间是昨天"这类问题时极易误判
+      - --default-time-zone=+08:00
+      # 案例的并发脚本最多 200 并发，连接数留足余量
+      - --max-connections=300
+      # 慢查询阈值与代码里的 SlowSqlInterceptor 对齐（300ms）
+      - --slow-query-log=1
+      - --long-query-time=0.3
+      # 记录未走索引的 SQL：ch04 的优化对象就是从这里来的
+      - --log-queries-not-using-indexes=0
+    volumes:
+      - polaris-mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    deploy:
+      resources:
+        limits:
+          memory: 1200M
+
+  redis:
+    image: redis:7-alpine
+    container_name: polaris-redis
+    profiles: ["min", "micro", "obs"]
+    ports:
+      - "16379:6379"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      # 缓存场景的标准策略：内存满时淘汰，而不是返回 OOM 错误。
+      #
+      # 为什么是 LFU 而不是默认的 LRU：
+      #   LRU 淘汰"最久未被访问"的键。它有两个经典弱点 ——
+      #   ① 一次全表扫描（比如运维跑了个 KEYS / SCAN 之后的批量读）
+      #      会把所有键的"最近访问时间"刷一遍，真正的热 key 反而被挤出去；
+      #   ② 它不区分"访问 100 万次的" 和 "刚被访问 1 次的"，冷启动期尤其糟。
+      #   LFU 按访问频率淘汰，天然贴合"20% 的 key 承担 80% 流量"的真实分布。
+      #
+      # 还有一个具体原因：`redis-cli --hotkeys` 只在 LFU 下可用，
+      # 而 ch07 的热 key 分析（scripts/redis-load.sh 产出的分布要能对上）
+      # 依赖它。用 LRU 时该命令直接报
+      #   ERR An LFU maxmemory policy is not selected, access frequency not tracked
+      #
+      # 代价要说清楚：LFU 的频率计数需要时间积累（默认 lfu-log-factor=10，
+      # 访问到一定次数后计数增长会变慢），刚切过来的头几分钟数据不可信。
+      # 另外本项目**把分布式锁也放在这个实例里**，allkeys-* 理论上都可能淘汰锁键 ——
+      # 所以锁的 TTL 必须远小于业务超时，且业务侧必须有"锁丢失"的正确性兜底
+      # （见 StockMapper 的 WHERE 条件：真正的防线在数据库，不在锁）。
+      - --maxmemory-policy
+      - allkeys-lfu
+      # 为什么要动 lfu-log-factor（默认 10）：
+      #   默认值是**对数增长** —— 计数到一定值后，每次访问只有 1/((counter-5)*10+1)
+      #   的概率 +1。这样设计是为了在长时间运行中不早早饱和到上限 255，
+      #   代价是短时间压测里所有 key 的计数都挤在 5~6 这一档，
+      #   `--hotkeys` 于是报出一堆"看起来一样热"的随机键，完全对不上
+      #   redis-load.sh 造出的 Zipf 分布（实测 top1 应占 7.5%，却和 top5000 同分）。
+      #   设为 0 = 每次访问都 +1（上限仍是 255），计数变成线性的，
+      #   热 key 立刻区分得出来。
+      # 生产上要不要设 0 取决于运行时长：跑几个月的话计数会长期饱和，
+      # 那时"极热"和"很热"就分不出来了 —— 默认 10 是对的。
+      # 本案例是短时演示，取 0；这是个**刻意的取舍**，不是抄来的参数。
+      - --lfu-log-factor
+      - "0"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ---------------- micro profile：消息与配置中心 ----------------
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.3.0
+    container_name: polaris-rocketmq-namesrv
+    profiles: ["micro", "obs"]
+    ports:
+      # 宿主 18876（不是默认的 19876 —— 本机已有项目占用）
+      - "18876:9876"
+    environment:
+      JAVA_OPT_EXT: "-Xms256m -Xmx256m -Xmn128m"
+    command: sh mqnamesrv
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.3.0
+    container_name: polaris-rocketmq-broker
+    profiles: ["micro", "obs"]
+    depends_on:
+      - rocketmq-namesrv
+    ports:
+      # 内外同号：broker.conf 里 listenPort=18911 会原样注册到 namesrv，
+      # 宿主机应用据此直连，所以映射必须 18911:18911 而不是 18911:10911
+      - "18911:18911"
+      - "18909:10909"
+    # 必须以 root 运行：named volume 由 Docker 创建时属主是 root，
+    # 而镜像默认 USER 是 rocketmq（uid 3000），于是启动时报
+    #   java.io.FileNotFoundException: /home/rocketmq/store/lock (Permission denied)
+    # 随后 initialize 失败、在 shutdown 阶段又抛出几个无关的 NPE，
+    # 把真正的错误埋在日志末尾 —— 这就是"看日志要看第一条 ERROR"的现场。
+    # 生产环境不要这么做，应该用 initContainer chown 或 fsGroup。
+    user: root
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+      JAVA_OPT_EXT: "-Xms512m -Xmx512m -Xmn256m"
+    volumes:
+      - ./rocketmq/broker.conf:/home/rocketmq/broker.conf:ro
+      - polaris-rocketmq-data:/home/rocketmq/store
+    command: sh mqbroker -c /home/rocketmq/broker.conf
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  # ---------------- obs profile：指标与看板 ----------------
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: polaris-prometheus
+    profiles: ["obs"]
+    ports:
+      - "19090:9090"
+    # Linux 上 docker 默认不解析 host.docker.internal，必须显式加映射，
+    # 否则 scrape 目标全部 down，而 Grafana 上只会显示"没有数据"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - polaris-prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: polaris-grafana
+    profiles: ["obs"]
+    depends_on:
+      - prometheus
+    ports:
+      - "13000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: polaris
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/overview.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+volumes:
+  polaris-mysql-data:
+  polaris-rocketmq-data:
+  polaris-prometheus-data:

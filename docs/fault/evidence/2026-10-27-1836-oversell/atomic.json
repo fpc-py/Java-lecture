@@ -1,0 +1,15 @@
+{
+  "mode": "ATOMIC",
+  "concurrency": 200,
+  "qty": 1,
+  "window_ms": 30,
+  "stock_before": 100,
+  "stock_after": 0,
+  "success": 100,
+  "failed": 100,
+  "sold": 100,
+  "oversell": 0,
+  "ledger_gap": 0,
+  "elapsed_s": 1.071,
+  "tps": 93.4
+}

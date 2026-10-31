@@ -1,0 +1,1202 @@
+{
+  "uid": "polaris-jvm",
+  "title": "Polaris · JVM 与线程池",
+  "tags": [
+    "polaris",
+    "jvm",
+    "ch02",
+    "ch03"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "① 内存版图：堆内 / 堆外必须分开看",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "堆使用率",
+      "description": "只看堆会得出错误结论。ch02 场景 A 里 heap 常年 40%，进程照样被 OOMKilled。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) / sum(jvm_memory_max_bytes{area=\"heap\"}) * 100",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "进程 RSS",
+      "description": "RSS 才是被 cgroup/k8s limit 约束的那个数。它与堆的差额就是堆外。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 6,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decmbytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "process_resident_memory_bytes / 1024 / 1024",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "堆外占比",
+      "description": "超过 50% 说明堆外吃得比堆还多 —— 这时候再怎么调 -Xmx 都没用。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 6,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 70
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "(process_resident_memory_bytes - sum(jvm_memory_used_bytes{area=\"heap\"})) / process_resident_memory_bytes * 100",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "GC 暂停速率",
+      "description": "每秒花在 GC 上多少秒。>0.05 即 5% 的吞吐被 GC 吃掉。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 6,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.05
+              },
+              {
+                "color": "red",
+                "value": 0.15
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(rate(jvm_gc_pause_seconds_sum[1m]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "堆内存（used / committed / max）",
+      "description": "used 反复贴顶 + committed 等于 max = 堆真的不够了；used 有锯齿但 committed 平稳 = 正常的新生代回收。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(jvm_memory_used_bytes{area=\"heap\"})",
+          "legendFormat": "used",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(jvm_memory_committed_bytes{area=\"heap\"})",
+          "legendFormat": "committed",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(jvm_memory_max_bytes{area=\"heap\"})",
+          "legendFormat": "max",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "非堆（Metaspace / Code Cache / Direct）",
+      "description": "Metaspace 单调上升 = 类加载泄漏（动态代理反复生成类）。Direct 上升不降 = ByteBuf 未 release。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(jvm_memory_used_bytes{area=\"nonheap\",id=\"Metaspace\"})",
+          "legendFormat": "Metaspace",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(jvm_memory_used_bytes{area=\"nonheap\",id=\"CodeHeap 'non-nmethods'\"})",
+          "legendFormat": "CodeHeap non-nmethods",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(jvm_memory_used_bytes{area=\"nonheap\",id=\"CodeHeap 'profiled nmethods'\"})",
+          "legendFormat": "CodeHeap profiled",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(jvm_buffer_memory_used_bytes{id=\"direct\"})",
+          "legendFormat": "Direct Buffer",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(jvm_buffer_memory_used_bytes{id=\"mapped\"})",
+          "legendFormat": "Mapped Buffer",
+          "refId": "E"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "② GC：次数、耗时、单次停顿时长",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "GC 次数速率（按 action）",
+      "description": "只看总次数会漏掉 Full GC：YGC 100 次/分是正常的，FGC 1 次/分就是事故。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            },
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum by (action) (rate(jvm_gc_pause_seconds_count[1m]))",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "GC 单次停顿（平均 / 最大）",
+      "description": "平均停顿保证有数；最大停顿依赖 registry 是否导出 _max。P99 抖动的第一嫌疑人：超过 200ms 且与 RT 抖动时间点重合，基本可以定案。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum by (action) (rate(jvm_gc_pause_seconds_sum[1m])) / clamp_min(sum by (action) (rate(jvm_gc_pause_seconds_count[1m])), 0.001)",
+          "legendFormat": "平均 {{action}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "max by (action) (jvm_gc_pause_seconds_max[1m])",
+          "legendFormat": "最大 {{action}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "③ 线程：数量、状态、各池占用",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "线程数",
+      "description": "live 持续上涨且不回落 = 线程泄漏或线程池无界。peak 是给容量模型用的。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "jvm_threads_live_threads",
+          "legendFormat": "live",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "jvm_threads_daemon_threads",
+          "legendFormat": "daemon",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "jvm_threads_peak_threads",
+          "legendFormat": "peak",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "线程状态分布",
+      "description": "blocked 涨 = 锁竞争；waiting 涨而 runnable 不涨 = 全在等下游（ch03 场景 A）。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "jvm_threads_states_threads{state=\"runnable\"}",
+          "legendFormat": "runnable",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "jvm_threads_states_threads{state=\"blocked\"}",
+          "legendFormat": "blocked",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "jvm_threads_states_threads{state=\"waiting\"}",
+          "legendFormat": "waiting",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "jvm_threads_states_threads{state=\"timed-waiting\"}",
+          "legendFormat": "timed-waiting",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "④ 线程池（舱壁）：active / queue / rejected",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "线程池 active（按 pool）",
+      "description": "biz-rec 打满而 biz-stock 平稳 = 舱壁生效。两条一起涨 = 池子被合并了。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "executor_active",
+          "legendFormat": "{{pool}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "队列水位（0~1，>0.6 告警）",
+      "description": "水位过 0.6 说明用户已经在等了。到 1.0 就只剩拒绝这一种结局。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 33,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisSoftMin": null
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "executor_queue_usage",
+          "legendFormat": "{{pool}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "拒绝速率（>0 即业务降级）",
+      "description": "这是 ch03 §3.3 里唯一必须告警的线程池指标。active 打满只是忙，拒绝才是掉请求。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 33,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum by (pool) (rate(executor_rejected_total[1m]))",
+          "legendFormat": "{{pool}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "⑤ 弱依赖兜底（promotion / member）",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "弱依赖调用与降级",
+      "description": "两条线重合 = 弱依赖 100% 失败但主链路还活着，这正是要的效果。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(rate(bulkhead_weak_calls_total[1m]))",
+          "legendFormat": "调用速率",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(rate(bulkhead_weak_timeouts_total[1m]))",
+          "legendFormat": "降级速率",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "弱依赖降级率",
+      "description": "降级率 100% 时，下单接口仍然返回 201 —— 但金额已经不再是优惠后的价格。这个数字必须和业务方对齐，否则会变成「优惠突然没了」的客诉。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 42,
+        "w": 12,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum(rate(bulkhead_weak_timeouts_total[5m])) / clamp_min(sum(rate(bulkhead_weak_calls_total[5m])), 0.001)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "⑥ HTTP 层：与业务指标对齐看",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 47,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP P99 / P50（按 uri）",
+      "description": "P50 不动而 P99 起飞 = 长尾问题（锁竞争/慢 SQL/下游超时），不是整体变慢。两者一起涨才是容量不足。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket[1m])))",
+          "legendFormat": "P99 {{uri}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket[1m])))",
+          "legendFormat": "P50 {{uri}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP QPS（按 status）",
+      "description": "4xx 上涨通常是限流/库存不足（业务正常）；5xx 上涨才是故障。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "polaris-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            },
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "polaris-prom"
+          },
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count[1m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

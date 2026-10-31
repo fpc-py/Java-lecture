@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: polaris-notify-service
+  datasource:
+    url: jdbc:mysql://localhost:13306/polaris_notify?serverTimezone=Asia/Shanghai&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:polaris}
+    password: ${DB_PASSWORD:polaris}
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+server:
+  port: 18087
+  shutdown: graceful
+
+# 没配 name-server 时不注册任何 RocketMQ 监听器（见消费者的 @ConditionalOnProperty 注释）
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:18876}
+  producer:
+    group: polaris-notify-producer
+
+polaris:
+  mode: ${POLARIS_MODE:local}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    com.polaris.trade: INFO

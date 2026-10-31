@@ -1,0 +1,15 @@
+{
+  "mode": "NAIVE",
+  "concurrency": 200,
+  "qty": 1,
+  "window_ms": 30,
+  "stock_before": 100,
+  "stock_after": 96,
+  "success": 200,
+  "failed": 0,
+  "sold": 200,
+  "oversell": 100,
+  "ledger_gap": -196,
+  "elapsed_s": 1.52,
+  "tps": 131.5
+}

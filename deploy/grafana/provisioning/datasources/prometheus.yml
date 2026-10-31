@@ -1,0 +1,19 @@
+apiVersion: 1
+
+# 数据源用固定 uid，而不是让 Grafana 自动分配：
+# 看板 JSON 里写的是 uid（见 jvm.json / overview.json），自动分配的话
+# 换个环境 uid 就变了，所有面板会显示 "Datasource not found" —— 而且
+# 这个错误在 provisioning 日志里只有一行 warning，极容易被忽略。
+datasources:
+  - name: Prometheus
+    uid: polaris-prom
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      # 与 prometheus.yml 的 scrape_interval 保持一致。
+      # 设小了没用（数据点就那么多），设大了会让 rate() 的计算窗口失真
+      timeInterval: 15s
+      httpMethod: POST

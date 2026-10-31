@@ -1,0 +1,15 @@
+{
+  "mode": "LOCKED",
+  "concurrency": 200,
+  "qty": 1,
+  "window_ms": 30,
+  "stock_before": 100,
+  "stock_after": 54,
+  "success": 46,
+  "failed": 154,
+  "sold": 46,
+  "oversell": 0,
+  "ledger_gap": 0,
+  "elapsed_s": 3.565,
+  "tps": 12.9
+}

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  订单列表查询：本文件是 ch05「${} 注入」的完整教学现场。
+
+  同一个功能给了两个 select：
+    1. pageUnsafe  反面教材，用 ${} 拼排序字段与方向
+    2. pageSafe    正确写法，排序字段走白名单枚举，值全部用 #{}
+
+  为什么要保留"错误写法"：因为只贴正确代码，读者记不住风险在哪。
+  真实的评审场景是"看到 ${} 就知道要问一句"，这个条件反射只能靠对照建立。
+
+  注意：XML 注释里不能出现连续两个减号（XML 规范禁止），
+  所以下面描述注入 payload 时用 [MINUS][MINUS] 代替 ——
+  这个限制本身也是个坑：很多人从 SQL 里复制粘注释，直接把 mapper 弄崩。
+-->
+<mapper namespace="com.polaris.trade.order.infra.OrderQueryMapper">
+
+    <!-- ============ 反例：注入点 ============
+         攻击方式：sortField = "id) ,(SELECT CASE WHEN (SELECT SUBSTR(password,1,1)
+                   FROM t_admin WHERE id=1)='a' THEN 1 ELSE 1/0 END) [MINUS][MINUS] "
+         （真实 payload 的结尾是两个减号，即 SQL 的行注释符；
+           粘贴到 XML 注释里会触发 SAXParseException）
+         后果：可盲注任意表。若数据库账号权限过大，还能 INTO OUTFILE 写文件。
+         这条 SQL 在生产上活了 2 个月才被渗透测试发现（ch14 场景 D）。
+    -->
+    <select id="pageUnsafe" resultType="com.polaris.trade.order.infra.OrderRow">
+        SELECT id, order_no, user_id, merchant_id, amount_cents, status, created_at
+        FROM t_order
+        WHERE merchant_id = #{merchantId}
+        <if test="statuses != null and statuses.size() > 0">
+            AND status IN
+            <foreach collection="statuses" item="st" open="(" separator="," close=")">#{st}</foreach>
+        </if>
+        ORDER BY ${sortField} ${sortOrder}
+        LIMIT #{offset}, #{size}
+    </select>
+
+    <!-- ============ 正例：白名单 + 覆盖索引 ============
+         索引 idx_merchant_status_time (merchant_id, status, created_at)
+         执行计划：type=range, key=idx_merchant_status_time, Extra=Using index（覆盖，无回表）
+         改造前：type=ALL, rows=1842337, Extra=Using where; Using filesort
+    -->
+    <select id="pageSafe" resultType="com.polaris.trade.order.infra.OrderRow">
+        SELECT id, order_no, user_id, merchant_id, amount_cents, status, created_at
+        FROM t_order
+        WHERE merchant_id = #{merchantId}
+        <if test="statuses != null and statuses.size() > 0">
+            AND status IN
+            <foreach collection="statuses" item="st" open="(" separator="," close=")">#{st}</foreach>
+        </if>
+        <if test="cursorId != null">
+            AND id &lt; #{cursorId}
+        </if>
+        <choose>
+            <when test="sortField == 'created_at'">ORDER BY created_at DESC, id DESC</when>
+            <when test="sortField == 'amount_cents'">ORDER BY amount_cents DESC, id DESC</when>
+            <otherwise>ORDER BY id DESC</otherwise>
+        </choose>
+        LIMIT #{size}
+    </select>
+
+    <!-- 深分页的延迟关联写法：先只在索引上翻页拿到主键，再回表取整行。
+         offset=1000000 时从 8s 降到 200ms 级别（ch04 §3.2）。 -->
+    <select id="pageByDeferredJoin" resultType="com.polaris.trade.order.infra.OrderRow">
+        SELECT o.id, o.order_no, o.user_id, o.merchant_id, o.amount_cents, o.status, o.created_at
+        FROM t_order o
+        INNER JOIN (
+            SELECT id FROM t_order
+            WHERE merchant_id = #{merchantId}
+            ORDER BY id DESC
+            LIMIT #{offset}, #{size}
+        ) page ON page.id = o.id
+        ORDER BY o.id DESC
+    </select>
+</mapper>

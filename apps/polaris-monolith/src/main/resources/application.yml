@@ -1,0 +1,106 @@
+spring:
+  application:
+    name: polaris-monolith
+  # 单体模式下所有"服务"共用一个库 polaris_mono。
+  # 这不是偷懒：模块化单体的常见做法就是"逻辑上分模块、物理上共库"，
+  # 拆分时再按 schema 迁移（ch10 绞杀者的第一步）。
+  datasource:
+    url: jdbc:mysql://localhost:13306/polaris_mono?serverTimezone=Asia/Shanghai&characterEncoding=utf8&rewriteBatchedStatements=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:polaris}
+    password: ${DB_PASSWORD:polaris}
+    hikari:
+      # 单体只有一个池，按整机连接预算给，而不是按服务给
+      maximum-pool-size: 40
+      minimum-idle: 8
+      connection-timeout: 1000
+      max-lifetime: 1200000
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    # 六个服务的 db/migration 都在 classpath 的同一路径下，
+    # 靠分段版本号（V1xx/V2xx/...）保证不冲突
+    locations: classpath:db/migration
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  data:
+    redis:
+      # 注意端口是 16379 而不是 6379：案例的所有中间件都跑在高位端口，
+      # 避免与开发者本机已有的 Redis 冲突（冲突时最常见的症状是
+      # "连上了但数据不对"—— 其实连的是另一个项目的实例）
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:16379}
+      timeout: 200ms
+      lettuce:
+        pool:
+          max-active: 32
+          max-idle: 16
+          min-idle: 4
+
+server:
+  port: 18080
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: 200
+    connection-timeout: 5s
+
+# 单体模式下不连 RocketMQ：outbox relay 仍会写库，只是没有 broker 可投递。
+# 需要验证异步链路时把 name-server 打开（compose 的 micro / full profile）。
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:18876}
+  # producer.group 必须配，否则 RocketMQTemplate 根本不会被创建。
+  # rocketmq-spring-boot-starter 的自动配置条件是
+  #   @ConditionalOnProperty(prefix="rocketmq", value={"name-server","producer.group"})
+  # 两者齐全才装配。只配 name-server 时启动失败在"未找到 RocketMQTemplate"，
+  # 而错误信息完全没提 producer.group —— 排查时极易误判成网络或依赖问题。
+  producer:
+    group: ${ROCKETMQ_PRODUCER_GROUP:polaris-producer}
+    # 发送超时必须小于下单接口的时间预算（ch02：没有超时的客户端等于没有客户端）
+    send-message-timeout: 3000
+
+polaris:
+  # 关键开关：local = 进程内直调，micro = 走 HTTP
+  mode: local
+  worker-id: 1
+  pay:
+    simulate-success: true
+  security:
+    # 仅本地演示：让 curl 能直接下单。开启时启动日志会打 ERROR 告警
+    dev-mode: ${POLARIS_SECURITY_DEV_MODE:true}
+  data:
+    lock-wait-millis: 3000
+    slow-sql-threshold-ms: 300
+  promotion:
+    # 弱依赖故障注入：给优惠计算加固定延迟（毫秒）。
+    # 这是 ch03「舱壁隔离」的演示开关 —— 调到 3000 之后，
+    # 下单接口的 P99 应该**几乎不变**（弱依赖 120ms 超时后走兜底），
+    # 而 biz-rec 线程池的 active 会稳定停在 8/8。
+    # 如果 P99 跟着涨到 3s，说明舱壁失效了。
+    simulate-delay-ms: ${POLARIS_COUPON_DELAY_MS:0}
+  demo:
+    # ch07 复现开关（超卖 / 缓存穿透击穿雪崩）。
+    # 这里有一个**会超卖**的扣减实现，所以默认是关的，测试/演示时显式打开：
+    #   POLARIS_DEMO=true scripts/run-monolith.sh
+    # 生产环境永远不要打开 —— 它不是"演示代码没用上"，是"演示代码能扣坏库存"。
+    enabled: ${POLARIS_DEMO:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # bulkpools 是自定义端点（com.polaris.trade.guard.concurrent.BulkheadEndpoint）。
+        # 自定义端点**不会**被 include: "*" 之外的东西自动带出来，
+        # 而且忘记加在这里的表现是 404 —— 没有报错、没有日志，只有"端点怎么没了"。
+        include: health,info,prometheus,bulkpools
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    com.polaris.trade: INFO

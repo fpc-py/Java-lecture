@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 通知服务：MQ 消费端范例，幂等消费 + 死信的第一现场（ch08） -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.polaris.trade</groupId>
+        <artifactId>polaris-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>polaris-notify-service</artifactId>
+    <name>Polaris Notify Service</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-contract</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-data</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-mq</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-guard</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-observability</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <classifier>exec</classifier>
+                    <mainClass>com.polaris.trade.notify.NotifyServiceApplication</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

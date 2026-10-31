@@ -1,0 +1,75 @@
+spring:
+  application:
+    name: polaris-order-service
+  datasource:
+    url: jdbc:mysql://localhost:13306/polaris_order?serverTimezone=Asia/Shanghai&characterEncoding=utf8&rewriteBatchedStatements=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:polaris}
+    password: ${DB_PASSWORD:polaris}
+    hikari:
+      # 连接池大小 = 20：不是拍脑袋，是 (CPU 核数 × 2) + 有效磁盘数 的经验值，
+      # 且必须 ≤ 数据库 max_connections / 服务实例数。详见 docs/capacity-model.md
+      maximum-pool-size: 20
+      minimum-idle: 5
+      # 连接超时必须 < 接口总预算（2500ms），否则等到 30s 才失败，用户早就走了
+      connection-timeout: 1000
+      # 注意：下面这个值要小于 MySQL 的 wait_timeout（默认 28800s），
+      # 否则连接会被服务端悄悄掐断，报 "Communications link failure"
+      max-lifetime: 1200000
+      connection-test-query: SELECT 1
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:16379}
+      timeout: 200ms
+  lifecycle:
+    # 优雅停机的总等待上限：给在途请求留 30s，超过就强制关
+    timeout-per-shutdown-phase: 30s
+
+server:
+  port: 18082
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: 200
+    # 优雅停机：先停止接收新请求，等在途请求跑完再关。
+    # 不配这个，滚动发布会稳定产生一批 502（ch13 §3.4）
+    connection-timeout: 5s
+
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:18876}
+  producer:
+    group: polaris-order-producer
+    send-message-timeout: 3000
+
+polaris:
+  mode: ${POLARIS_MODE:local}
+  peers:
+    stock-url: ${STOCK_URL:http://localhost:18083}
+  pay:
+    simulate-success: ${POLARIS_PAY_SIMULATE_SUCCESS:true}
+  data:
+    slow-sql-threshold-ms: 300
+  guard:
+    flow:
+      resource: order-create
+      qps: 2500
+      thread: 200
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+
+logging:
+  level:
+    com.polaris.trade: INFO

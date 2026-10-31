@@ -1,0 +1,65 @@
+# ============================================================
+# Polaris 交易中台 · 容器内 JVM 参数（ch02）
+#
+# 用法：Dockerfile 里
+#   ENV JAVA_TOOL_OPTIONS_FILE=/app/jvm.options
+#   ENTRYPOINT ["sh","-c","exec java $(cat $JAVA_TOOL_OPTIONS_FILE | grep -v '^#') -jar app.jar"]
+# 或者更稳妥的方式（见 deploy/docker/entrypoint.sh）：
+#   由 entrypoint 逐行读入后展开成参数数组，避免经 shell 字符串拼接时被二次分词。
+#
+# 每一行都对应 ch02 里的一个具体故障，不是抄来的模板。
+# ============================================================
+
+# ---------- 1. 堆：用百分比而不是 -Xmx ----------
+# 容器里写死 -Xmx3g 的经典事故：limit 4Gi、堆 3G，剩下 1G 要装
+# 元空间 + 线程栈 + 直接内存 + GC 结构 ≈ 1.2G，于是 Pod 被 OOMKilled
+# 而 heap 使用率只有 40%（ch02 场景 A）。
+#
+# 60% 的来历：给堆外留 40%。一个 200 线程的 Tomcat 应用堆外大约
+#   元空间 180~260M + 线程栈 200×512K≈100M + 直接内存 ≤256M
+#   + Code Cache 240M + G1 结构 ≈ 堆的 5~10%
+# 在 2~4G 的容器里，40% 的余量刚好覆盖，且不会浪费太多。
+-XX:MaxRAMPercentage=60
+# Initial 与 Max 一致：容器里"慢慢涨堆"没有意义，只会让前期多几次 Young GC
+-XX:InitialRAMPercentage=60
+
+# ---------- 2. 堆外：必须显式约束 ----------
+# MaxDirectMemorySize 的默认值 = -Xmx。也就是说你写了 -Xmx3g，
+# 等于同时允许了 3G 的堆外直接内存 —— 这一条是 OOMKilled 最常见的元凶。
+-XX:MaxDirectMemorySize=256m
+# 元空间默认无上限。动态代理/热部署里它涨到 1G 也不会报错，直到 Metaspace OOM
+-XX:MaxMetaspaceSize=256m
+# 线程栈从 1M 降到 512K：200 个 Tomcat 线程就省下 100M。
+# 缺点是深递归会更容易 StackOverflowError —— 业务代码不该有深递归，这个交换是划算的
+-Xss512k
+
+# ---------- 3. GC ----------
+-XX:+UseG1GC
+# 200ms 是"用户可感知但可接受"的停顿上限。注意它只是 G1 的目标，
+# 不是保证：堆太大或者 Humongous 分配太多时，G1 会自己放弃这个目标
+-XX:MaxGCPauseMillis=200
+
+# ---------- 4. OOM 现场保留 ----------
+# 没有 HeapDump 的 OOM，等于把"事故现场"直接烧掉了
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:HeapDumpPath=/app/dump
+# OOM 后不退出：退出了 kubelet 会立刻重启，容器里就看不到现场了。
+# 代价是进程处于不可用状态，所以这一条**只适合预发/演练环境**，
+# 生产应配合 exit-on-out-of-memory 让重启发生（由 k8s 补齐可用性）
+# -XX:+ExitOnOutOfMemoryError
+
+# ---------- 5. 可观测 ----------
+# 容器里 GC 日志走 stdout：12-factor，由日志采集器统一收走。
+# 落文件的做法在容器里是反模式 —— 容器一重建，文件就没了
+-Xlog:gc*:stdout:time,uptime,level,tags
+# NMT 必须在**启动时**开启，运行中无法打开（jcmd 会直接报 not enabled）。
+# 这正是"出事时才发现没开 NMT"的根因：等你想要它，它已经来不及了。
+# summary 模式开销约 5%~10% 吞吐，换来的是"堆外到底谁占的"这个答案
+-XX:NativeMemoryTracking=summary
+
+# ---------- 6. 环境 ----------
+-Dfile.encoding=UTF-8
+-Duser.timezone=Asia/Shanghai
+# 容器熵池在早期内核上偏小，SecureRandom 初始化会阻塞。
+# 用非阻塞的 urandom 避免启动卡 30s（老问题，但踩到一次就够记一辈子）
+-Djava.security.egd=file:/dev/./urandom

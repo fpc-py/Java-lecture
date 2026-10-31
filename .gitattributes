@@ -1,0 +1,24 @@
+# Polaris · 跨平台换行与编码基线
+# 目的：Windows 上开发、Linux 容器内运行，必须锁死 LF，
+# 否则容器里执行 *.sh 会报 `\r: not found`（ch13 真实坑）。
+
+* text=auto eol=lf
+
+*.sh        text eol=lf
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
+*.sql       text eol=lf
+*.java      text eol=lf
+*.xml       text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.conf      text eol=lf
+*.lua       text eol=lf
+
+*.jar       binary
+*.png       binary
+*.jpg       binary
+*.hprof     binary
+*.gz        binary

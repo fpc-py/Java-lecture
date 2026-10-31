@@ -1,0 +1,2 @@
+com.polaris.trade.data.PolarisDataAutoConfiguration
+com.polaris.trade.data.config.DataSourceStartupReporter

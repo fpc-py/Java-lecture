@@ -1,0 +1,53 @@
+# ============================================================
+# Polaris 交易中台 · 本地开发/压测 JVM 参数（ch02 / ch04）
+#
+# 与 deploy/docker/jvm.options 的差异只有一处，但这一处很关键：
+#
+#   容器版用 -XX:MaxRAMPercentage=60（跟着 cgroup 限额走）
+#   本地版用 -Xms512m -Xmx512m（固定值）
+#
+# 为什么本地反过来不能用百分比：
+#   开发者机器内存各不相同（16G / 32G / 64G）。按百分比算，
+#   同一份压测脚本在不同人的机器上会得到完全不同的 QPS-RT 曲线，
+#   于是"我这里压出来 1200 QPS"和"我这里 4000 QPS"都不是假话，却互相无法比较。
+#   压测的第一原则是**控制变量**：堆大小必须固定。
+#
+# 512m 是为了让 GC 在压测中真的发生。堆给到 4G 时，一套压测下来
+# 可能一次 Young GC 都没有，你观察不到任何 GC 现象 —— 而那恰恰是要教的东西。
+# ============================================================
+
+-Xms512m
+-Xmx512m
+
+-XX:+UseG1GC
+-XX:MaxGCPauseMillis=200
+
+# 堆外同样要卡住，否则 -Xmx512m 的"512m"会让人误以为整个进程只有 512m
+-XX:MaxMetaspaceSize=256m
+-XX:MaxDirectMemorySize=192m
+-Xss512k
+
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:HeapDumpPath=dump
+
+# 本地落文件，方便 loadtest 跑完直接 grep；filecount 控制总量，
+# 不设上限的话一次压测能写出几个 G 的 gc 日志。
+#
+# 这里的路径必须是**相对路径**，是一条踩出来的硬约束：
+# 本仓库路径含中文（D:\aafpc\Java专题）。Windows 上 JVM 解析命令行参数用的是
+# sun.jnu.encoding（简体中文系统 = GBK），而 bash 传过去的是 UTF-8 字节，
+# 于是 file= 变成乱码路径，JVM 在**初始化日志系统时**就失败：
+#   [error][logging] Error opening log file '.../logs/gc-monolith.log'
+#   Error: Could not create the Java Virtual Machine.
+# 该错误发生在 -Dfile.encoding 生效之前，所以"加编码参数"救不了它，
+# 只能不把中文绝对路径传给 JVM —— 由 run-monolith.sh 先 cd 到仓库根再启动。
+-Xlog:gc*:file=logs/gc-monolith.log:time,uptime,level,tags:filecount=5,filesize=20m
+
+# NMT：capture-evidence.sh 里的 jcmd VM.native_memory summary 依赖它
+-XX:NativeMemoryTracking=summary
+
+# 允许 jstack/jcmd attach（部分环境默认关闭）
+-XX:-DisableAttachMechanism
+
+-Dfile.encoding=UTF-8
+-Duser.timezone=Asia/Shanghai

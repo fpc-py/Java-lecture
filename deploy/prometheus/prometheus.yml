@@ -1,0 +1,52 @@
+# ============================================================
+# Prometheus 抓取配置
+#
+# 应用跑在宿主机（不是容器）时，Prometheus 在容器里访问宿主机要绕一层：
+#   Linux   → host.docker.internal 需要 extra_hosts 或 --add-host
+#   macOS/Win → Docker Desktop 自带 host.docker.internal
+# 这里统一用 host.docker.internal，并在 compose 里加了 extra_hosts（见下）
+# ============================================================
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: polaris-case
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: polaris-monolith
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:18080"]
+        labels:
+          app: polaris-monolith
+
+  - job_name: polaris-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:18070"]
+        labels:
+          app: polaris-gateway
+
+  - job_name: polaris-order
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:18082"]
+        labels:
+          app: polaris-order
+
+  - job_name: polaris-stock
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:18083"]
+        labels:
+          app: polaris-stock
+
+  - job_name: polaris-promotion
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:18084"]
+        labels:
+          app: polaris-promotion

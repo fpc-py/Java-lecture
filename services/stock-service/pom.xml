@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 库存服务：库存扣减、TCC 冻结/解冻、缓存与分布式锁的主战场（ch07 / ch09） -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.polaris.trade</groupId>
+        <artifactId>polaris-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>polaris-stock-service</artifactId>
+    <name>Polaris Stock Service</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-contract</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-data</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-mq</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-guard</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-observability</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- classifier=exec：主产物保持普通 jar，才能被 polaris-monolith 依赖 -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <classifier>exec</classifier>
+                    <mainClass>com.polaris.trade.stock.StockServiceApplication</mainClass>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

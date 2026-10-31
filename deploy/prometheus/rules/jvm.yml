@@ -1,0 +1,113 @@
+# ============================================================
+# Prometheus 告警规则 · JVM / 线程池 / 弱依赖（ch02 / ch03 / ch15）
+#
+# 每一条阈值都能追到推导过程。写不出推导过程的阈值，在复盘会上
+# 一定会被问"为什么是 0.6 不是 0.8"，而答不上来的告警最终会被静音。
+#
+# 命名规范：Polaris<域><现象>，severity 只用 warning / critical 两级。
+# 三级以上的分级在中小团队里必然退化成"全都只看 critical"。
+# ============================================================
+groups:
+  - name: polaris-jvm
+    interval: 15s
+    rules:
+
+      # -------- 堆 --------
+      # 85% 的来历：G1 在堆占用超过 ~85% 后会放弃 MaxGCPauseMillis 目标，
+      # 转入"尽快回收"模式，停顿会变得不可预测。所以 85% 是"服务质量还能保住"的上限，
+      # 不是"要 OOM 了"的临界线。等逼近 100% 再告警，已经来不及扩容。
+      - alert: PolarisHeapUsageHigh
+        expr: |
+          sum(jvm_memory_used_bytes{area="heap"})
+            / sum(jvm_memory_max_bytes{area="heap"}) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          chapter: ch02
+        annotations:
+          summary: "堆使用率 > 85% 持续 5 分钟"
+          description: "当前 {{ $value | humanizePercentage }}。先看 GC 面板确认是「堆不够」还是「对象太多」，两者解法完全不同。"
+          runbook: "docs/runbook/RB-01-GC打满.md"
+
+      # -------- 堆外 --------
+      # 这条对应 ch02 场景 A：heap 只用了 40%，进程却被 OOMKilled。
+      # 判据是"堆外占比 > 50%"——此时 -Xmx 已经不是瓶颈，调它没有任何意义。
+      - alert: PolarisOffHeapDominant
+        expr: |
+          (process_resident_memory_bytes
+             - sum(jvm_memory_used_bytes{area="heap"}))
+            / process_resident_memory_bytes > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          chapter: ch02
+        annotations:
+          summary: "堆外内存占比超过 50%"
+          description: "RSS 里有超过一半不在堆。查三处：Direct Buffer（Netty/ByteBuf 未 release）、Metaspace（动态代理）、线程栈（线程数失控）。NMT summary 能直接定位。"
+
+      # -------- GC --------
+      # 5% 是个经验分界线：GC 吃掉 5% 以上的 CPU 时，吞吐下降已经能被业务感知，
+      # 但还没有到"必须立刻处理"的程度，所以给 warning 而不是 critical。
+      - alert: PolarisGcPauseRatioHigh
+        expr: sum(rate(jvm_gc_pause_seconds_sum[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          chapter: ch02
+        annotations:
+          summary: "GC 占用超过 5% 的 CPU 时间"
+          description: "当前 {{ $value | humanizePercentage }}。先分辨是 YGC 频繁（新生代太小/分配速率高）还是 FGC（老年代泄漏）。处理方式相反。"
+
+      # -------- 线程池：队列饱和 --------
+      # 0.6 对应 ch03 §3.3。低于 0.6 时排队时间还在用户的容忍范围内；
+      # 超过 0.6 说明"已经在排队"，而队列一旦满就直接拒绝，中间没有缓冲。
+      - alert: PolarisExecutorQueueSaturated
+        expr: executor_queue_usage > 0.6
+        for: 1m
+        labels:
+          severity: warning
+          chapter: ch03
+        annotations:
+          summary: "线程池 {{ $labels.pool }} 队列水位 {{ $value | humanizePercentage }}"
+          description: "队列过半即用户在等。对照 executor_active：active 未打满而队列涨 → 下游慢；active 打满且队列涨 → 容量真的不够。"
+
+      # -------- 线程池：拒绝 --------
+      # 任何拒绝都要告警，没有"偶尔拒几个没关系"这种说法：
+      # 一次拒绝 = 一个用户的下单/查询失败了，且是**我们自己**主动拒的。
+      - alert: PolarisExecutorRejecting
+        expr: sum by (pool) (rate(executor_rejected_total[1m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          chapter: ch03
+        annotations:
+          summary: "线程池 {{ $labels.pool }} 正在拒绝任务"
+          description: "拒绝速率 {{ $value | humanize }}/s。这不是性能问题，是**功能已降级**：被拒的请求直接失败或返回兜底值。"
+
+      # -------- 弱依赖 --------
+      # 弱依赖 100% 降级本身**不算故障**（那是设计目标），
+      # 但它意味着"用户看到的优惠/推荐全部消失"，必须让业务方知道。
+      - alert: PolarisWeakDependencyDegraded
+        expr: |
+          sum(rate(bulkhead_weak_timeouts_total[5m]))
+            / clamp_min(sum(rate(bulkhead_weak_calls_total[5m])), 0.001) > 0.9
+        for: 2m
+        labels:
+          severity: warning
+          chapter: ch03
+        annotations:
+          summary: "弱依赖降级率 > 90%"
+          description: "主链路仍然是 200，但优惠/推荐已全部走兜底值。这是「安静的事故」：监控全绿，客诉先到。"
+
+      # -------- 线程数 --------
+      # 500 的来历：Tomcat 200 + 三个业务池 48 + Hikari 40 + MQ/Redis/调度 ≈ 320，
+      # 留 50% 余量到 500。超过 500 基本可以断定"有人新建了线程池但没设上限"。
+      - alert: PolarisThreadCountAbnormal
+        expr: jvm_threads_live_threads > 500
+        for: 10m
+        labels:
+          severity: warning
+          chapter: ch03
+        annotations:
+          summary: "线程数 {{ $value }} 超出预期上限"
+          description: "执行 `scripts/capture-evidence.sh --tag thread-leak`，看 3 份 jstack 里哪个线程名前缀在持续增长。"

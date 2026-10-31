@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: polaris-pay-service
+  datasource:
+    url: jdbc:mysql://localhost:13306/polaris_pay?serverTimezone=Asia/Shanghai&characterEncoding=utf8&rewriteBatchedStatements=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:polaris}
+    password: ${DB_PASSWORD:polaris}
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+server:
+  port: 18085
+  shutdown: graceful
+
+polaris:
+  mode: ${POLARIS_MODE:local}
+  pay:
+    # 关掉它 = 渠道只返回"受理中"，必须靠补偿任务主动查询推进
+    simulate-success: ${POLARIS_PAY_SIMULATE_SUCCESS:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    com.polaris.trade: INFO

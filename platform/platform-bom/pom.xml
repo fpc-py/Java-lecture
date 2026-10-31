@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Polaris 平台 BOM（供其他团队 import 使用）
+
+  为什么内部也要有 BOM：ch19 的"版本漂移"问题在多团队时更严重——
+  三个团队各自写 spring-boot 版本，最终跑出三种运行时的组合。
+  这个 BOM 是唯一出口，外部项目只 import 它，不写任何版本号。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.polaris.trade</groupId>
+        <artifactId>polaris-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>polaris-bom</artifactId>
+    <packaging>pom</packaging>
+    <name>Polaris Platform BOM</name>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-contract</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-web</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-data</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-mq</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-guard</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-observability</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-security</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-test</artifactId>
+                <version>${project.version}</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

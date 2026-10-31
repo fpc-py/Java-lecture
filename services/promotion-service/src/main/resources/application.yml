@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: polaris-promotion-service
+  datasource:
+    url: jdbc:mysql://localhost:13306/polaris_promotion?serverTimezone=Asia/Shanghai&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:polaris}
+    password: ${DB_PASSWORD:polaris}
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+server:
+  port: 18084
+  shutdown: graceful
+
+polaris:
+  mode: ${POLARIS_MODE:local}
+  promotion:
+    # >0 时人为加延迟，用来验证下单链路的 120ms 超时兜底是否真的生效
+    # 例：POLARIS_PROMOTION_DELAY_MS=3000 后下单仍应返回 200（实付=会员价，无优惠）
+    simulate-delay-ms: ${POLARIS_PROMOTION_DELAY_MS:0}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    com.polaris.trade: INFO

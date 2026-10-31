@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: polaris-stock-service
+  datasource:
+    url: jdbc:mysql://localhost:13306/polaris_stock?serverTimezone=Asia/Shanghai&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:polaris}
+    password: ${DB_PASSWORD:polaris}
+    hikari:
+      # 库存服务的连接池刻意比订单服务小：它的热点是同一行库存，
+      # 池子开大只会让更多线程堆在行锁上排队，吞吐不升反降（ch03 §3.3）
+      maximum-pool-size: 10
+      connection-timeout: 800
+      max-lifetime: 1200000
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:16379}
+      timeout: 200ms
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+server:
+  port: 18083
+  shutdown: graceful
+
+polaris:
+  mode: ${POLARIS_MODE:local}
+  data:
+    lock-wait-millis: 3000
+  worker-id: ${POLARIS_WORKER_ID:1}
+  demo:
+    # ch07 复现开关（超卖 / 缓存穿透击穿雪崩）。
+    # 默认关闭：里面有一个会超卖的扣减实现，开着就等于给库存留了个后门。
+    enabled: ${POLARIS_DEMO:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    com.polaris.trade: INFO

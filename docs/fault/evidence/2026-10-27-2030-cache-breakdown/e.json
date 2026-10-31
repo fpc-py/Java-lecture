@@ -1,0 +1,13 @@
+{
+  "path": "raw",
+  "extra": "",
+  "count": 4000,
+  "key_span": 200,
+  "key_base": 800000,
+  "concurrency": 200,
+  "ok": 4000,
+  "errors": 0,
+  "error_samples": [],
+  "elapsed_s": 1.402,
+  "qps": 2853.8
+}

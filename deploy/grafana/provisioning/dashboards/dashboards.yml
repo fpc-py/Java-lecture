@@ -1,0 +1,15 @@
+apiVersion: 1
+
+providers:
+  - name: polaris
+    orgId: 1
+    folder: Polaris
+    type: file
+    # 允许在 UI 上改：改好之后从 "Dashboard settings → JSON Model" 复制回来，
+    # 比手写 JSON 快得多。不允许改的话，每次调整都要重建容器。
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

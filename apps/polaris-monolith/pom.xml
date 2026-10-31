@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  polaris-monolith：单体装配（一个 JVM 里跑完 7 个域）
+
+  这是整个案例最关键的"一套代码两种装配"设计：
+    · 业务代码只写在 services/* 里，一行都不重复
+    · 单体模式：本模块把 6 个 service 模块的普通 jar 拉进来，进程内调用（polaris.mode=local）
+    · 微服务模式：各服务独立启动，通过 HTTP/Feign 调用（polaris.mode=micro）
+
+  意义：ch10 讲"从单体到微服务的演进"时，不需要维护两套代码 ——
+  演进的是**装配方式与通信边界**，不是业务逻辑。这正是绞杀者模式能落地的原因。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.polaris.trade</groupId>
+        <artifactId>polaris-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>polaris-monolith</artifactId>
+    <name>Polaris Monolith</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-order-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-stock-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-pay-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-member-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-promotion-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-notify-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.polaris.trade.monolith.MonolithApplication</mainClass>
+                    <!--
+                      注意这里**没有** <classifier>exec</classifier>，而各 service 模块有。
+                      区别的根源：
+                        · service 模块的主产物必须是"普通 jar"，否则 monolith 依赖不到它们
+                        · monolith 的主产物必须是"可执行 fat jar"，因为它就是最终应用
+                      写成一样会怎样：
+                        · 都给 exec  → monolith 打出来的普通 jar 无法 java -jar
+                        · 都不给 exec → service 的 fat jar 被 monolith 依赖，
+                          于是各服务自带的 BOOT-INF/lib 全部变成一层"jar 里的 jar"，
+                          启动时找不到类，报 NoClassDefFoundError
+                      这个坑在"一套代码两种装配"的项目里几乎必踩一次，
+                      所以这里把两种配置放在一起对比。
+                    -->
+                </configuration>
+                <executions>
+                    <execution>
+                        <!--
+                          执行 id 必须叫 repackage，不能叫 repackage-executable。
+                          原因：本工程的根 pom 继承自 spring-boot-starter-parent，
+                          它在 pluginManagement 里已经声明了一个 id 为 repackage 的执行。
+                          只要模块里声明了这个插件，那个执行就会被继承下来。
+                          于是取一个新名字会得到**两个** repackage：
+                            [INFO] spring-boot:repackage (repackage)             ← 继承的
+                            [INFO] spring-boot:repackage (repackage-executable) ← 自己写的
+                          第二次是在"已经 repackage 过的 jar"上再包一层，
+                          产物能跑，但体积翻倍、启动变慢，而且和 Dockerfile 里
+                          假设的 jar 结构对不上。
+                          同 id 声明会**覆盖**父级的执行配置，只剩一次。
+                        -->
+                        <id>repackage</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

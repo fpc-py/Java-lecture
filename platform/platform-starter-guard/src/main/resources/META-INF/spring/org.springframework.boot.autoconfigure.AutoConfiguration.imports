@@ -1,0 +1,2 @@
+com.polaris.trade.guard.PolarisConcurrentAutoConfiguration
+com.polaris.trade.guard.PolarisGuardAutoConfiguration

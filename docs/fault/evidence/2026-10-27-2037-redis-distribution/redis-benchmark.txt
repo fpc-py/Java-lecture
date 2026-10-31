@@ -1,0 +1,2 @@
+SET: 173913.05 requests per second, p50=0.143 msec
+GET: 158982.52 requests per second, p50=0.159 msec

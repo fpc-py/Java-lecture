@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 订单服务：整个案例的主战场（ch04/05/06/08/09/11/15 大半代码落在这里） -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.polaris.trade</groupId>
+        <artifactId>polaris-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>polaris-order-service</artifactId>
+    <name>Polaris Order Service</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-contract</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-data</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-mq</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-guard</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-observability</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.polaris.trade</groupId>
+            <artifactId>polaris-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <classifier>exec</classifier>
+                    <mainClass>com.polaris.trade.order.OrderServiceApplication</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

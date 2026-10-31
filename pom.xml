@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Polaris 交易中台 · 聚合父 POM
+
+  这里是整个仓库的"版本真相"入口：
+    · Java 21（release 21，配合 scripts/mvnw.sh 的进程级 JDK 切换）
+    · Spring Boot 3.3.4 / Spring Cloud 2023.0.1
+    · 所有第三方版本集中在这一个文件，模块里禁止写 <version>
+  对应专题：ch19 供应链安全（版本锁定、禁 SNAPSHOT、BOM 集中管理）
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.3.4</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.polaris.trade</groupId>
+    <artifactId>polaris-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Polaris Trade Platform</name>
+    <description>Polaris 交易中台 · 十二讲教学案例宿主工程</description>
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <spring-cloud.version>2023.0.1</spring-cloud.version>
+        <mybatis-plus.version>3.5.9</mybatis-plus.version>
+        <redisson.version>3.20.0</redisson.version>
+        <rocketmq-spring.version>2.3.0</rocketmq-spring.version>
+        <sentinel.version>1.8.6</sentinel.version>
+        <nimbus-jose-jwt.version>9.37.1</nimbus-jose-jwt.version>
+        <logstash-encoder.version>7.4</logstash-encoder.version>
+        <archunit.version>1.3.0</archunit.version>
+    </properties>
+
+    <modules>
+        <module>platform/platform-bom</module>
+        <module>platform/platform-common</module>
+        <module>platform/platform-starter-web</module>
+        <module>platform/platform-starter-data</module>
+        <module>platform/platform-starter-mq</module>
+        <module>platform/platform-starter-guard</module>
+        <module>platform/platform-starter-observability</module>
+        <module>platform/platform-starter-security</module>
+        <module>platform/platform-starter-test</module>
+        <module>contract</module>
+        <module>services/stock-service</module>
+        <module>services/promotion-service</module>
+        <module>services/member-service</module>
+        <module>services/pay-service</module>
+        <module>services/notify-service</module>
+        <module>services/order-service</module>
+        <module>services/gateway-service</module>
+        <module>apps/polaris-monolith</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-jsqlparser</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson</artifactId>
+                <version>${redisson.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-spring-boot-starter</artifactId>
+                <version>${rocketmq-spring.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.alibaba.csp</groupId>
+                <artifactId>sentinel-core</artifactId>
+                <version>${sentinel.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.nimbusds</groupId>
+                <artifactId>nimbus-jose-jwt</artifactId>
+                <version>${nimbus-jose-jwt.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>net.logstash.logback</groupId>
+                <artifactId>logstash-logback-encoder</artifactId>
+                <version>${logstash-encoder.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
+            </dependency>
+
+            <!-- ================= 内部模块 ================= -->
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-contract</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-web</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-data</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-mq</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-guard</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-observability</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-security</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-starter-test</artifactId>
+                <version>${project.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- 服务模块：单体装配需要显式版本，微服务各自 exec 启动 -->
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-order-service</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-stock-service</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-pay-service</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-member-service</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-promotion-service</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.polaris.trade</groupId>
+                <artifactId>polaris-notify-service</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!--
+          lombok 全局声明（optional）：只影响编译期，不打进制品。
+          版本由 Spring Boot BOM 管理（3.3.4 → lombok 1.18.34）。
+          ch01 的升级清单里专门提到：JDK 21 至少需要 1.18.30，否则注解处理器会因
+          内部 API 变化而报 "java.lang.NoSuchFieldError: com.sun.tools.javac.tree.JCTree$JCImport"。
+        -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <release>${maven.compiler.release}</release>
+                        <parameters>true</parameters>
+                        <compilerArgs>
+                            <arg>-Xlint:all,-processing,-serial</arg>
+                        </compilerArgs>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <argLine>-Dfile.encoding=UTF-8</argLine>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <!-- ch19：依赖治理的三条硬约束，构建期就拦住，而不是靠人 review -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.4.1</version>
+                <executions>
+                    <execution>
+                        <id>enforce-baseline</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[21,)</version>
+                                    <message>本项目要求 JDK 21+，请用 scripts/mvnw.sh 执行构建</message>
+                                </requireJavaVersion>
+                                <banDuplicatePomDependencyVersions/>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>log4j:log4j</exclude>
+                                        <!--
+                                          commons-collections 的处理方式值得单独说明（ch19 §2.2）：
+                                          3.0~3.2.1 存在 CVE-2015-6420 反序列化 RCE；
+                                          3.2.2 是修补版本，但项目已 EOL。
+                                          RocketMQ 5.2 的 rocketmq-acl 仍传递依赖 3.2.2。
+                                          这里刻意"只禁漏洞区间"而不是禁整个 artifact ——
+                                          一刀切禁掉会让整个 MQ 依赖链无法解析，团队转头就去删规则，
+                                          规则一旦被删就再也不会有约束力。这是依赖治理最常见的失败模式。
+                                        -->
+                                        <exclude>commons-collections:commons-collections:[,3.2.2)</exclude>
+                                    </excludes>
+                                    <message>禁止已知存在 CVE 的旧版依赖（ch19 供应链安全）</message>
+                                </bannedDependencies>
+                                <!-- 只有打正式版本（-Drelease=true）时才禁 SNAPSHOT 依赖，日常开发允许 -->
+                                <requireReleaseDeps>
+                                    <onlyWhenRelease>true</onlyWhenRelease>
+                                    <message>发布构建禁止任何 SNAPSHOT 依赖：版本号必须可追溯</message>
+                                </requireReleaseDeps>
+                            </rules>
+                            <fail>true</fail>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
